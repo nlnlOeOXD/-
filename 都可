@@ -1,0 +1,160 @@
+#include <iostream>
+using namespace std;
+
+int main()
+{
+	int labor, totaldays, numOfShiftType, leavedays, w1, w2, requirements , maxValue = 0, maximizedShiftType = 0, minValueDay = 0, leaveRequireCoef = 1;
+	float totalDemandOfADay = 0, minAverageDemand = 0, laborValue = 0, leaveCoef = 0;
+	int shiftTypeArray[200][200], laborDemandArray[200][200], scheduleArray[200][200], nightShiftBoolArray[200][200], 
+	workDaysArray[200], leaveRequirementArray[2][200], nightShiftArray[200];
+	float averageDemandArray[200], leaveCoefsArray[200]; //初始化
+
+	cin >> labor >> totaldays >> numOfShiftType >> leavedays >> w1 >> w2 >> requirements;
+	for (int i = 0; i < numOfShiftType + 1; i++)
+		for (int j = 0; j < 24; j++)
+			cin >> shiftTypeArray[i][j];
+	for (int i = 0; i < totaldays; i++)
+		for (int j = 0; j < 24; j++)
+			cin >> laborDemandArray[i][j];
+	for (int i = 0; i < 2; i++)
+		for (int j = 0; j < requirements; j++)
+			cin >> leaveRequirementArray[i][j]; //input
+
+	for (int i = 0; i < totaldays; i++) //算出每日的缺工平均並做成Array
+	{
+		totalDemandOfADay = 0;
+		for (int j = 0; j < 24; j++)
+		{
+			totalDemandOfADay += laborDemandArray[i][j];
+		}
+		averageDemandArray[i] = (totalDemandOfADay / 24.0);
+	}
+
+	for (int i = 0; i < numOfShiftType + 1; i++) //算出每個班型是否為夜班並做成Array
+	{
+		for (int j = 18; j < 24; j++)
+		{
+			if (shiftTypeArray[i][j] == 1)
+			{
+				nightShiftArray[i] = 1;
+			}
+		}
+	}
+
+	for (int i = 0; i < totaldays; i++) //將班表初始化為全部-1的Array
+		for (int j = 0; j < labor; j++)
+			scheduleArray[j][i] = -1;
+
+	for (int i = 0; i < totaldays; i++) //每天請假需加上的係數的Array
+		leaveCoefsArray[i] = (2/3.0);
+
+	for (int i = 0; i < totaldays; i++) // i是日 j是人
+	{ 
+		for (int j = 0; j < labor; j++)
+		{
+			bool leaveRequirementBoolean = 0;
+			for (int m = 0; m < requirements; m++) //若員工i在第n日有休假需求，使其布林值為1
+			{
+				if (leaveRequirementArray[0][m] == j + 1 and leaveRequirementArray[1][m] == i + 1)
+				{
+					leaveRequirementBoolean = 1;
+				}
+			}
+			if (scheduleArray[j][i] == 0) //若已排休，不排班
+			{
+			}
+			else if (workDaysArray[j] == totaldays - leavedays) //若上班日數達上限，排休
+			{
+				scheduleArray[j][i] = 0;
+			}
+			else if (w1 >= leaveRequireCoef and leaveRequirementBoolean == 1) //若該員工在當日有休假需求且w1>休假需求係數，排休
+			{
+				scheduleArray[j][i] = 0;
+			}
+			else //不排休的情況
+			{
+				maxValue = 0;
+				maximizedShiftType = 0;
+				for (int n = 0; n < numOfShiftType; n++) //考慮每個班型能減少的缺工需求，取最多者
+				{
+					laborValue = 0;
+					for (int m = 0; m < 24; m++)
+					{
+						if (shiftTypeArray[n][m] != 0 and laborDemandArray[i][m] > 0)
+						{
+							laborValue += 1;
+						}
+					}
+
+					if (nightShiftArray[n] == 1) //若該班型屬於夜班，且該員工前六天有上過夜班，需要扣掉超額夜班次數*w2後再考慮
+					{
+						for (int l = 1; l < 7; l++)
+						{
+							if (nightShiftBoolArray[j][i - l] == 1)
+							{
+								laborValue = laborValue - ((7 - l) * w2 * w2);
+							}
+						}
+					}
+					if (laborValue > maxValue)
+					{
+						maxValue = laborValue;
+						maximizedShiftType = n + 1;
+					}
+				}
+				scheduleArray[j][i] = maximizedShiftType; //將最佳化後的班型排入班表
+
+				if (maximizedShiftType != 0) //若不是排休，該員工工作日+1
+				{
+					workDaysArray[j]++;
+					if (nightShiftArray[maximizedShiftType - 1] == 1) //若最佳班型是夜班，記錄該員工在本日有上夜班
+					{
+						nightShiftBoolArray[j][i] = 1;
+					}
+				}
+
+				for (int m = 0; m < 24; m++) //將缺工數扣掉班型
+				{
+					laborDemandArray[i][m] = std::max(laborDemandArray[i][m] - shiftTypeArray[maximizedShiftType - 1][m], 0);
+				}
+
+				if (scheduleArray[j][i + 1] == scheduleArray[j][i + 2] and scheduleArray[j][i + 2] == scheduleArray[j][i + 3] 
+				and scheduleArray[j][i + 3] == scheduleArray[j][i + 4] and scheduleArray[j][i + 4] == -1) 
+				{
+					minAverageDemand = 1000000;
+					minValueDay = 0;
+					for (int v = 1; v < int(totaldays / leavedays) + 1; v++) //若後___天都未排班，選擇平均缺工數最小的那天排休
+					{
+						if (averageDemandArray[i + v] <= minAverageDemand)
+						{
+							minAverageDemand = averageDemandArray[i + v];
+							minValueDay = v;
+						}
+					}
+					scheduleArray[j][i + minValueDay] = 0;
+					averageDemandArray[i + minValueDay] += leaveCoefsArray[i + minValueDay]; //將該日平均缺工數加上係數
+					leaveCoefsArray[i + minValueDay] += leaveCoef; //將當日係數變大，降低發生大家都在同日請假的情況的機率(非必要)
+				}
+			}
+		}
+	}
+	
+	for (int j = 0; j < labor; j++) //輸出班表
+	{
+		for (int i = 0; i < totaldays; i++)
+		{
+			if (i != totaldays - 1)
+			{
+				cout << scheduleArray[j][i] << ',';
+			}
+			else if (j == labor - 1)
+			{
+				cout << scheduleArray[j][i];
+				return 0;
+			}
+			else
+				cout << scheduleArray[j][i] << '\n';
+		}
+	}
+	return 0;
+}
